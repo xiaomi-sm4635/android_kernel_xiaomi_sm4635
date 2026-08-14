@@ -1,11 +1,12 @@
 load(":target_variants.bzl", "la_variants")
 load(":msm_kernel_la.bzl", "define_msm_la")
 load(":image_opts.bzl", "boot_image_opts")
+load("//build/kernel/kleaf:kernel.bzl", "ddk_headers")
 
-target_name = "pitti"
+target_name = "warm"
 
-def define_pitti():
-    _pitti_in_tree_modules = [
+def define_warm():
+    _warm_in_tree_modules = [
         # keep sorted
         "drivers/base/regmap/qti-regmap-debugfs.ko",
         "drivers/char/rdbg.ko",
@@ -49,6 +50,9 @@ def define_pitti():
         "drivers/iio/adc/qcom-vadc-common.ko",
         "drivers/iio/adc/qti-glink-adc.ko",
         "drivers/input/misc/pm8941-pwrkey.ko",
+        "drivers/input/fingerprints/goodix/goodix_fp.ko",
+        "drivers/input/fingerprints/silead/silead_fp.ko",
+        "drivers/input/fingerprints/xiaomi_fp/xiaomi_fingerprint.ko",
         "drivers/interconnect/icc-test.ko",
         "drivers/interconnect/qcom/icc-debug.ko",
         "drivers/interconnect/qcom/icc-rpm.ko",
@@ -84,6 +88,7 @@ def define_pitti():
         "drivers/power/reset/qcom-dload-mode.ko",
         "drivers/power/reset/qcom-pon.ko",
         "drivers/power/reset/reboot-mode.ko",
+        "drivers/power/reset/qcom-reboot-reason.ko",
         "drivers/power/supply/qti_battery_charger.ko",
         "drivers/pwm/pwm-qti-lpg.ko",
         "drivers/regulator/debug-regulator.ko",
@@ -174,6 +179,7 @@ def define_pitti():
         "drivers/thermal/qcom/thermal_pause.ko",
         "drivers/tty/serial/msm_geni_serial.ko",
         "drivers/ufs/host/ufs_qcom.ko",
+        "drivers/misc/simtray/simtray.ko",
         "drivers/ufs/host/ufshcd-crypto-qti.ko",
         "drivers/uio/msm_sharedmem/msm_sharedmem.ko",
         "drivers/usb/dwc3/dwc3-msm.ko",
@@ -196,9 +202,18 @@ def define_pitti():
         "net/qrtr/qrtr-smd.ko",
         "net/wireless/cfg80211.ko",
         "sound/usb/snd-usb-audio-qmi.ko",
+
+        "drivers/mtd/mtdoops.ko",
+        "drivers/mtd/mtdblock.ko",
+        "drivers/mtd/mtd.ko",
+        "drivers/mtd/chips/chipreg.ko",
+        "drivers/mtd/devices/block2mtd.ko",
+        "drivers/mtd/parsers/ofpart.ko",
+        "drivers/mtd/mtd_blkdevs.ko",
+        "drivers/cpufreq/cpumaxfreq.ko",
     ]
 
-    _pitti_consolidate_in_tree_modules = _pitti_in_tree_modules + [
+    _warm_consolidate_in_tree_modules = _warm_in_tree_modules + [
         # keep sorted
         "drivers/cpuidle/governors/qcom_simple_lpm.ko",
         "drivers/hwtracing/coresight/coresight-etm4x.ko",
@@ -225,9 +240,9 @@ def define_pitti():
 
     for variant in la_variants:
         if variant == "consolidate":
-            mod_list = _pitti_consolidate_in_tree_modules
+            mod_list = _warm_consolidate_in_tree_modules
         else:
-            mod_list = _pitti_in_tree_modules
+            mod_list = _warm_in_tree_modules
             board_kernel_cmdline_extras += ["nosoftlockup"]
             kernel_vendor_cmdline_extras += ["nosoftlockup"]
             board_bootconfig_extras += ["androidboot.console=0"]
@@ -243,3 +258,22 @@ def define_pitti():
                 board_bootconfig_extras = board_bootconfig_extras,
             ),
         )
+
+    ddk_headers(
+        name = "hwid_headers",
+        hdrs = [
+            "drivers/misc/hwid/hwid.h",
+        ],
+        includes = [
+            "drivers/misc/hwid",
+        ],
+        visibility = ["//visibility:public"],
+    )
+    ddk_headers(
+        name = "mi_irq_headers",
+        hdrs = native.glob(["kernel/irq/*.h"]),
+        includes = [
+            "kernel/irq",
+        ],
+        visibility = ["//visibility:public"],
+    )

@@ -9,6 +9,7 @@ la_targets = [
     "niobe",
     "pineapple",
     "pitti",
+    "warm",
     "sdmsteppeauto",
     "seraph",
 ]

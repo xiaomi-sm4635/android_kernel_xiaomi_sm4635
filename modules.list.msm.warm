@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-only
-# Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+# Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
 
 qcom_wdt_core.ko
 gh_virt_wdt.ko
@@ -51,11 +51,9 @@ mem-hooks.ko
 mem_buf_dev.ko
 mem_buf.ko
 qcom_dma_heaps.ko
-gh_mem_notifier.ko
 qcom-pmu-lib.ko
 qcom-dcvs.ko
 dcc_v2.ko
-memory_dump_v2.ko
 msm_dma_iommu_mapping.ko
 kryo_arm64_edac.ko
 gcc-pitti.ko
@@ -76,3 +74,10 @@ qcom-cpufreq-hw.ko
 clk-smd-rpm.ko
 secure_buffer.ko
 ufshcd-crypto-qti.ko
+goodix_fp.ko
+silead_fp.ko
+xiaomi_fingerprint.ko
+simtray.ko
+mi_memory.ko
+panel_event_notifier.ko
+cpumaxfreq.ko
