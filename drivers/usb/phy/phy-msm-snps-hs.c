@@ -235,6 +235,7 @@ static void msm_hsphy_modeled_d0_to_d1(struct msm_hsphy *hsphy)
 		return;
 
 	pm_runtime_put_sync(hsphy->pd_devs[0]);
+}
 
 static void get_panel_info(void)
 {
