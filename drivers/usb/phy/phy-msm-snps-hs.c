@@ -1208,13 +1208,9 @@ static int msm_hsphy_probe(struct platform_device *pdev)
 			return PTR_ERR(phy->phy_reset);
 	}
 
-	phy->param_override_seq_cnt = of_property_count_elems_of_size(
-        get_panel_info(); //get_panel_info
+	get_panel_info();
 	pr_err("panel_info=%d\n", panel_info);
-	phy->phy_reset = devm_reset_control_get(dev, "phy_reset");
-	if (IS_ERR(phy->phy_reset))
-		return PTR_ERR(phy->phy_reset);
-	
+
 	if (panel_info == 1)
 		phy->param_override_seq_cnt = of_property_count_elems_of_size(
 
