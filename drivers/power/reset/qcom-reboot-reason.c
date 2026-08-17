@@ -90,6 +90,7 @@ static int qcom_reboot_reason_reboot(struct notifier_block *this,
 				 &reasons[RESTART_REASON_NORMAL].pon_reason,
 				 sizeof(reasons[RESTART_REASON_NORMAL].pon_reason));
 		return NOTIFY_OK;
+	}
 
 	if (of_device_is_compatible(reboot->dev->of_node, "qcom,imem-reboot-reason"))
 		reboot_mode = REBOOT_WARM;
@@ -101,11 +102,9 @@ static int qcom_reboot_reason_reboot(struct notifier_block *this,
 		if (!strcmp(cmd, reason->cmd)) {
 			rc = nvmem_cell_write(reboot->nvmem_cell,
 					 &reason->pon_reason,
-					 reason->size);
+					 sizeof(reason->pon_reason));
 			if (rc < 0)
 				pr_err("PON reason store failed, rc=%d\n", rc);
-			break;
-					 sizeof(reason->pon_reason));
 			return NOTIFY_OK;
 		}
 
