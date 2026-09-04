@@ -180,6 +180,7 @@ camera-kernel \
 display-drivers/msm \
 mm-sys-kernel/ubwcp \
 securemsm-kernel \
+wlan/platform \
 synx-kernel \
 dsp-kernel \
 eva-kernel \
@@ -202,8 +203,7 @@ touch-drivers \
 fingerprint \
 mm-drivers/sync_fence \
 mm-drivers/msm_ext_display \
-mm-drivers/hw_fence \
-wlan/platform"
+mm-drivers/hw_fence"
 
 ##
 ## Helper functions
@@ -290,11 +290,17 @@ build_modules() {
         if [ -n "$PREBUILTS_DIR" ] && [ -x "$PREBUILTS_DIR/bin/dtc" ]; then
             DTC_ARGS="DTC_EXT=$PREBUILTS_DIR/bin/dtc DTC_OVERLAY_TEST_EXT=$PREBUILTS_DIR/bin/ufdt_apply_overlay"
         fi
-        if ! make -j$(nproc --all) O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 $DTC_ARGS -C "$MODULES_SRC/$module" M="$MODULES_SRC/$module" KERNEL_SRC="$(pwd)" OUT_DIR="$(pwd)/out" TARGET_PRODUCT=$TARGET; then
+        # qcacld-3.0 needs its Makefile wrapper to compute WLAN_ROOT/MODNAME/defconfig
+        EXTRA_ARGS=""
+        if echo "$module" | grep -q "qcacld-3.0"; then
+            ABS_MODULES_SRC="$(readlink -e "$MODULES_SRC/$module")"
+            EXTRA_ARGS="WLAN_ROOT=$ABS_MODULES_SRC MODNAME=wlan CONFIG_QCA_CLD_WLAN_PROFILE=pitti_gki_adrastea CONFIG_QCA_WIFI_ISOC=0 CONFIG_QCA_WIFI_2_0=1 CONFIG_QCA_CLD_WLAN=m CONFIG_CNSS_OUT_OF_TREE=y"
+        fi
+        if ! make -j$(nproc --all) O="$(pwd)/out" ARCH=arm64 LLVM=1 LLVM_IAS=1 $DTC_ARGS $EXTRA_ARGS -C "$MODULES_SRC/$module" M="$MODULES_SRC/$module" KERNEL_SRC="$(pwd)" OUT_DIR="$(pwd)/out" TARGET_PRODUCT=$TARGET; then
             echo_w "Failed building $module, continuing"
             continue
         fi
-        if ! make -j$(nproc --all) O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 $DTC_ARGS -C "$MODULES_SRC/$module" M="$MODULES_SRC/$module" KERNEL_SRC="$(pwd)" OUT_DIR="$(pwd)/out" TARGET_PRODUCT=$TARGET INSTALL_MOD_PATH=modules INSTALL_MOD_STRIP=1 modules_install; then
+        if ! make -j$(nproc --all) O="$(pwd)/out" ARCH=arm64 LLVM=1 LLVM_IAS=1 $DTC_ARGS $EXTRA_ARGS -C "$MODULES_SRC/$module" M="$MODULES_SRC/$module" KERNEL_SRC="$(pwd)" OUT_DIR="$(pwd)/out" TARGET_PRODUCT=$TARGET INSTALL_MOD_PATH=modules INSTALL_MOD_STRIP=1 modules_install; then
             echo_w "Failed installing $module, continuing"
         fi
     done
