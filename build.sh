@@ -191,6 +191,7 @@ mmrm-driver \
 video-driver \
 wlan/qcacld-3.0 \
 dataipa/drivers/platform/msm \
+datarmnet-ext/mem \
 datarmnet/core \
 datarmnet-ext/aps \
 datarmnet-ext/offload \
@@ -291,10 +292,18 @@ build_modules() {
             DTC_ARGS="DTC_EXT=$PREBUILTS_DIR/bin/dtc DTC_OVERLAY_TEST_EXT=$PREBUILTS_DIR/bin/ufdt_apply_overlay"
         fi
         # qcacld-3.0 needs its Makefile wrapper to compute WLAN_ROOT/MODNAME/defconfig
+        # wlan/platform: pitti uses SNOC (ICNSS2); disable PCI CNSS2 which needs MHI
+        # that isn't available in this kernel
         EXTRA_ARGS=""
         if echo "$module" | grep -q "qcacld-3.0"; then
             ABS_MODULES_SRC="$(readlink -e "$MODULES_SRC/$module")"
+            PLAT_SYMVERS="$(readlink -e "$MODULES_SRC/wlan/platform/Module.symvers")"
             EXTRA_ARGS="WLAN_ROOT=$ABS_MODULES_SRC MODNAME=wlan CONFIG_QCA_CLD_WLAN_PROFILE=pitti_gki_adrastea CONFIG_QCA_WIFI_ISOC=0 CONFIG_QCA_WIFI_2_0=1 CONFIG_QCA_CLD_WLAN=m CONFIG_CNSS_OUT_OF_TREE=y"
+            if [ -n "$PLAT_SYMVERS" ]; then
+                EXTRA_ARGS="$EXTRA_ARGS KBUILD_EXTRA_SYMBOLS=$PLAT_SYMVERS"
+            fi
+        elif [ "$module" = "wlan/platform" ]; then
+            EXTRA_ARGS="WLAN_BASEMACHINE=warm"
         fi
         if ! make -j$(nproc --all) O="$(pwd)/out" ARCH=arm64 LLVM=1 LLVM_IAS=1 $DTC_ARGS $EXTRA_ARGS -C "$MODULES_SRC/$module" M="$MODULES_SRC/$module" KERNEL_SRC="$(pwd)" OUT_DIR="$(pwd)/out" TARGET_PRODUCT=$TARGET; then
             echo_w "Failed building $module, continuing"
