@@ -190,8 +190,8 @@ spu-kernel \
 mmrm-driver \
 video-driver \
 wlan/qcacld-3.0 \
-dataipa/drivers/platform/msm \
 datarmnet-ext/mem \
+dataipa/drivers/platform/msm \
 datarmnet/core \
 datarmnet-ext/aps \
 datarmnet-ext/offload \
