@@ -179,7 +179,7 @@ MODULES="audio-kernel \
 camera-kernel \
 display-drivers/msm \
 mm-sys-kernel/ubwcp \
-securemsm-kernel/smmu-proxy \
+securemsm-kernel \
 synx-kernel \
 dsp-kernel \
 eva-kernel \
@@ -200,7 +200,9 @@ datarmnet-ext/sch \
 datarmnet-ext/wlan \
 touch-drivers \
 fingerprint \
-mm-drivers \
+mm-drivers/sync_fence \
+mm-drivers/msm_ext_display \
+mm-drivers/hw_fence \
 wlan/platform"
 
 ##
@@ -278,10 +280,23 @@ build_modules() {
             echo_w "Skipping $module - not found at $MODULES_SRC/$module"
             continue
         fi
+        if [ ! -f "$MODULES_SRC/$module/Kbuild" ] && [ ! -f "$MODULES_SRC/$module/Makefile" ]; then
+            echo_w "Skipping $module - no Kbuild/Makefile at $MODULES_SRC/$module"
+            continue
+        fi
         echo -e "\nBuilding $module..."
-        m -C "$MODULES_SRC/$module" M="$MODULES_SRC/$module" KERNEL_SRC="$(pwd)" OUT_DIR="$(pwd)/out"
-        m -C "$MODULES_SRC/$module" M="$MODULES_SRC/$module" KERNEL_SRC="$(pwd)" OUT_DIR="$(pwd)/out" \
-            INSTALL_MOD_PATH=modules INSTALL_MOD_STRIP=1 modules_install || echo_w "Failed building $module, continuing"
+        # Use raw make for techpack modules to allow graceful failure (m() has || exit)
+        DTC_ARGS=""
+        if [ -n "$PREBUILTS_DIR" ] && [ -x "$PREBUILTS_DIR/bin/dtc" ]; then
+            DTC_ARGS="DTC_EXT=$PREBUILTS_DIR/bin/dtc DTC_OVERLAY_TEST_EXT=$PREBUILTS_DIR/bin/ufdt_apply_overlay"
+        fi
+        if ! make -j$(nproc --all) O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 $DTC_ARGS -C "$MODULES_SRC/$module" M="$MODULES_SRC/$module" KERNEL_SRC="$(pwd)" OUT_DIR="$(pwd)/out" TARGET_PRODUCT=$TARGET; then
+            echo_w "Failed building $module, continuing"
+            continue
+        fi
+        if ! make -j$(nproc --all) O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 $DTC_ARGS -C "$MODULES_SRC/$module" M="$MODULES_SRC/$module" KERNEL_SRC="$(pwd)" OUT_DIR="$(pwd)/out" TARGET_PRODUCT=$TARGET INSTALL_MOD_PATH=modules INSTALL_MOD_STRIP=1 modules_install; then
+            echo_w "Failed installing $module, continuing"
+        fi
     done
 
     # Determine modules lists - warm uses modules.list.msm.warm (with pitti fallback)
