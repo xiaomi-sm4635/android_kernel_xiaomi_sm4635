@@ -235,7 +235,8 @@ m() {
     if [ -n "$PREBUILTS_DIR" ] && [ -x "$PREBUILTS_DIR/bin/dtc" ]; then
         DTC_ARGS="DTC_EXT=$PREBUILTS_DIR/bin/dtc DTC_OVERLAY_TEST_EXT=$PREBUILTS_DIR/bin/ufdt_apply_overlay"
     fi
-    make -j$(nproc --all) O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 \
+    MAKE_JOBS=${MAKE_JOBS:-$(nproc --all)}
+    make -j$MAKE_JOBS O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 \
         $DTC_ARGS \
         TARGET_PRODUCT=$TARGET $@ || exit $?
 }
@@ -253,6 +254,8 @@ build_kernel() {
         echo_i "Copied kernel Image to $KERNEL_COPY_TO"
     fi
     # Also copy to out/dist for standalone
+    # kernel make install may have created out/dist as a file (the Image)
+    [ -f out/dist ] && rm -f out/dist
     mkdir -p out/dist
     cp out/arch/arm64/boot/Image out/dist/ 2>/dev/null || true
 }
@@ -305,11 +308,11 @@ build_modules() {
         elif [ "$module" = "wlan/platform" ]; then
             EXTRA_ARGS="WLAN_BASEMACHINE=warm"
         fi
-        if ! make -j$(nproc --all) O="$(pwd)/out" ARCH=arm64 LLVM=1 LLVM_IAS=1 $DTC_ARGS $EXTRA_ARGS -C "$MODULES_SRC/$module" M="$MODULES_SRC/$module" KERNEL_SRC="$(pwd)" OUT_DIR="$(pwd)/out" TARGET_PRODUCT=$TARGET; then
+        if ! make -j$MAKE_JOBS O="$(pwd)/out" ARCH=arm64 LLVM=1 LLVM_IAS=1 $DTC_ARGS $EXTRA_ARGS -C "$MODULES_SRC/$module" M="$MODULES_SRC/$module" KERNEL_SRC="$(pwd)" OUT_DIR="$(pwd)/out" TARGET_PRODUCT=$TARGET; then
             echo_w "Failed building $module, continuing"
             continue
         fi
-        if ! make -j$(nproc --all) O="$(pwd)/out" ARCH=arm64 LLVM=1 LLVM_IAS=1 $DTC_ARGS $EXTRA_ARGS -C "$MODULES_SRC/$module" M="$MODULES_SRC/$module" KERNEL_SRC="$(pwd)" OUT_DIR="$(pwd)/out" TARGET_PRODUCT=$TARGET INSTALL_MOD_PATH=modules INSTALL_MOD_STRIP=1 modules_install; then
+        if ! make -j$MAKE_JOBS O="$(pwd)/out" ARCH=arm64 LLVM=1 LLVM_IAS=1 $DTC_ARGS $EXTRA_ARGS -C "$MODULES_SRC/$module" M="$MODULES_SRC/$module" KERNEL_SRC="$(pwd)" OUT_DIR="$(pwd)/out" TARGET_PRODUCT=$TARGET INSTALL_MOD_PATH=modules INSTALL_MOD_STRIP=1 modules_install; then
             echo_w "Failed installing $module, continuing"
         fi
     done
