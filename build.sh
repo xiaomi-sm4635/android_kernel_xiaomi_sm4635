@@ -566,6 +566,8 @@ scripts/config --file out/.config -d CONFIG_SND_SOC_MSM_HDMI_CODEC_RX 2>/dev/nul
 # Enable display/mi_disp and spec_sync for pitti warm (display needs these)
 scripts/config --file out/.config -e CONFIG_DRM_MSM_MI_DISP 2>/dev/null || true
 scripts/config --file out/.config -e CONFIG_QCOM_SPEC_SYNC 2>/dev/null || true
+# UBWCP heap intentionally not enabled as builtin - would require mem_buf etc. (causes vmlinux mem_buf_vmperm_* errors)
+# mm-sys-kernel/ubwcp uses weak stub in ubwcp_stub.c when heap disabled
 # Alternative: disable the problematic driver via config if you don't need it
 # scripts/config --file out/.config -d CONFIG_SND_SOC_SIA8001 2>/dev/null || true
 
