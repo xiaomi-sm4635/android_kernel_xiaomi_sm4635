@@ -560,6 +560,9 @@ scripts/config --file out/.config \
 
 # Fix for sipa.c frame-larger-than (2752 > 2048) on clang - raise limit to 3072
 scripts/config --file out/.config --set-val CONFIG_FRAME_WARN 3072 2>/dev/null || true
+# Disable hdmi codec that requires mm_ext_display symbols not available in standalone audio build
+# If you need hdmi, build mm-drivers/msm_ext_display first and ensure KBUILD_EXTRA_SYMBOLS
+scripts/config --file out/.config -d CONFIG_SND_SOC_MSM_HDMI_CODEC_RX 2>/dev/null || true
 # Alternative: disable the problematic driver via config if you don't need it
 # scripts/config --file out/.config -d CONFIG_SND_SOC_SIA8001 2>/dev/null || true
 
