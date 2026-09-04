@@ -563,6 +563,9 @@ scripts/config --file out/.config --set-val CONFIG_FRAME_WARN 3072 2>/dev/null |
 # Disable hdmi codec that requires mm_ext_display symbols not available in standalone audio build
 # If you need hdmi, build mm-drivers/msm_ext_display first and ensure KBUILD_EXTRA_SYMBOLS
 scripts/config --file out/.config -d CONFIG_SND_SOC_MSM_HDMI_CODEC_RX 2>/dev/null || true
+# Enable display/mi_disp and spec_sync for pitti warm (display needs these)
+scripts/config --file out/.config -e CONFIG_DRM_MSM_MI_DISP 2>/dev/null || true
+scripts/config --file out/.config -e CONFIG_QCOM_SPEC_SYNC 2>/dev/null || true
 # Alternative: disable the problematic driver via config if you don't need it
 # scripts/config --file out/.config -d CONFIG_SND_SOC_SIA8001 2>/dev/null || true
 
