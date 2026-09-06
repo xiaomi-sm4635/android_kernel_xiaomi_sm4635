@@ -177,6 +177,7 @@ MODULES_SRC="../$MODULES_REPO/qcom/opensource"
 # Add display, mmrm, video, wlan, dataipa etc for completeness - skip if missing at build time
 MODULES="audio-kernel \
 camera-kernel \
+mm-drivers/sync_fence \
 display-drivers/msm \
 mm-sys-kernel/ubwcp \
 securemsm-kernel \
@@ -202,7 +203,6 @@ datarmnet-ext/sch \
 datarmnet-ext/wlan \
 touch-drivers \
 fingerprint \
-mm-drivers/sync_fence \
 mm-drivers/msm_ext_display \
 mm-drivers/hw_fence"
 
@@ -299,21 +299,74 @@ build_modules() {
         # that isn't available in this kernel
         EXTRA_ARGS=""
         if echo "$module" | grep -q "qcacld-3.0"; then
-            ABS_MODULES_SRC="$(readlink -e "$MODULES_SRC/$module")"
-            PLAT_SYMVERS="$(readlink -e "$MODULES_SRC/wlan/platform/Module.symvers")"
+            # Module artifacts land in the in-repo sm4635-modules copy because
+            # kbuild resolves the relative M= path from the O=out build dir;
+            # the bare $MODULES_SRC path instead resolves against this script's
+            # CWD (the out-of-repo pristine copy), so probe both locations.
+            ABS_MODULES_SRC=""
+            for cand in \
+                "$(pwd)/sm4635-modules/qcom/opensource/wlan/qcacld-3.0" \
+                "$MODULES_SRC/$module"; do
+                if [ -d "$cand" ]; then
+                    ABS_MODULES_SRC="$(readlink -e "$cand")"
+                    break
+                fi
+            done
+            PLAT_SYMVERS=""
+            for cand in \
+                "$(pwd)/sm4635-modules/qcom/opensource/wlan/platform/Module.symvers" \
+                "$MODULES_SRC/wlan/platform/Module.symvers"; do
+                if [ -f "$cand" ]; then
+                    PLAT_SYMVERS="$(readlink -e "$cand")"
+                    break
+                fi
+            done
             EXTRA_ARGS="WLAN_ROOT=$ABS_MODULES_SRC MODNAME=wlan CONFIG_QCA_CLD_WLAN_PROFILE=pitti_gki_adrastea CONFIG_QCA_WIFI_ISOC=0 CONFIG_QCA_WIFI_2_0=1 CONFIG_QCA_CLD_WLAN=m CONFIG_CNSS_OUT_OF_TREE=y"
             if [ -n "$PLAT_SYMVERS" ]; then
                 EXTRA_ARGS="$EXTRA_ARGS KBUILD_EXTRA_SYMBOLS=$PLAT_SYMVERS"
             fi
         elif [ "$module" = "wlan/platform" ]; then
             EXTRA_ARGS="WLAN_BASEMACHINE=warm"
+        elif [ "$module" = "bt-kernel" ]; then
+            # btpower.ko calls get_client_env_object (smcinvoke) exported by
+            # securemsm-kernel; pass its Module.symvers for modpost.
+            SECUREMSM_SYMVERS=""
+            for cand in \
+                "$(pwd)/sm4635-modules/qcom/opensource/securemsm-kernel/Module.symvers" \
+                "$MODULES_SRC/securemsm-kernel/Module.symvers"; do
+                if [ -f "$cand" ]; then
+                    SECUREMSM_SYMVERS="$(readlink -e "$cand")"
+                    break
+                fi
+            done
+            if [ -n "$SECUREMSM_SYMVERS" ]; then
+                EXTRA_ARGS="KBUILD_EXTRA_SYMBOLS=$SECUREMSM_SYMVERS"
+            fi
+        elif [ "$module" = "display-drivers/msm" ]; then
+            # msm_drm references spec_sync symbols from the sync_fence module;
+            # make sure it was built first and pass its Module.symvers.
+            # Module artifacts land in the in-repo sm4635-modules copy because
+            # kbuild resolves the relative M= path from the O=out build dir.
+            SYNC_FENCE_SYMVERS=""
+            for cand in \
+                "$(pwd)/sm4635-modules/qcom/opensource/mm-drivers/sync_fence/Module.symvers" \
+                "$MODULES_SRC/mm-drivers/sync_fence/Module.symvers"; do
+                if [ -f "$cand" ]; then
+                    SYNC_FENCE_SYMVERS="$(readlink -e "$cand")"
+                    break
+                fi
+            done
+            if [ -n "$SYNC_FENCE_SYMVERS" ]; then
+                EXTRA_ARGS="KBUILD_EXTRA_SYMBOLS=$SYNC_FENCE_SYMVERS"
+            fi
         fi
         if ! make -j$MAKE_JOBS O="$(pwd)/out" ARCH=arm64 LLVM=1 LLVM_IAS=1 $DTC_ARGS $EXTRA_ARGS -C "$MODULES_SRC/$module" M="$MODULES_SRC/$module" KERNEL_SRC="$(pwd)" OUT_DIR="$(pwd)/out" TARGET_PRODUCT=$TARGET; then
-            echo_w "Failed building $module, continuing"
-            continue
+            echo_e "Failed building $module, aborting"
+            exit 1
         fi
         if ! make -j$MAKE_JOBS O="$(pwd)/out" ARCH=arm64 LLVM=1 LLVM_IAS=1 $DTC_ARGS $EXTRA_ARGS -C "$MODULES_SRC/$module" M="$MODULES_SRC/$module" KERNEL_SRC="$(pwd)" OUT_DIR="$(pwd)/out" TARGET_PRODUCT=$TARGET INSTALL_MOD_PATH=modules INSTALL_MOD_STRIP=1 modules_install; then
-            echo_w "Failed installing $module, continuing"
+            echo_e "Failed installing $module, aborting"
+            exit 1
         fi
     done
 
@@ -533,6 +586,66 @@ build_dtbs() {
     cp "$DTBO_COPY_TO" out/dist/ 2>/dev/null || true
 }
 
+build_anykernel3() {
+    echo_i "Building AnyKernel3 zip..."
+    if [ ! -d AnyKernel3 ]; then
+        echo_w "AnyKernel3 dir not found, skipping"
+        return 0
+    fi
+    if [ ! -f out/arch/arm64/boot/Image ]; then
+        echo_w "Image not found, skipping AnyKernel3"
+        return 0
+    fi
+    cp out/arch/arm64/boot/Image AnyKernel3/Image 2>/dev/null || { echo_w "Failed to copy Image"; return 0; }
+    if [ -f out/dist/dtbo.img ]; then
+        cp out/dist/dtbo.img AnyKernel3/dtbo.img 2>/dev/null || true
+    elif [ -f out/dtbs/warm-sm4635-overlay.dtbo ]; then
+        cp out/dtbs/warm-sm4635-overlay.dtbo AnyKernel3/dtbo.img 2>/dev/null || true
+    elif [ -f out/arch/arm64/boot/dts/vendor/qcom/warm-sm4635-overlay.dtbo ]; then
+        cp out/arch/arm64/boot/dts/vendor/qcom/warm-sm4635-overlay.dtbo AnyKernel3/dtbo.img 2>/dev/null || true
+    fi
+    rm -rf AnyKernel3/modules/system/lib/modules/*.ko 2>/dev/null || true
+    mkdir -p AnyKernel3/modules/system/lib/modules
+    if [ -d "$VDLKM_DIR" ] && ls "$VDLKM_DIR"/*.ko >/dev/null 2>&1; then
+        cp "$VDLKM_DIR"/*.ko AnyKernel3/modules/system/lib/modules/ 2>/dev/null || true
+    fi
+    if [ -d "$VBOOT_DIR" ] && ls "$VBOOT_DIR"/*.ko >/dev/null 2>&1; then
+        cp "$VBOOT_DIR"/*.ko AnyKernel3/modules/system/lib/modules/ 2>/dev/null || true
+    fi
+    if ! ls AnyKernel3/modules/system/lib/modules/*.ko >/dev/null 2>&1; then
+        if [ -d out/modules ]; then
+            find out/modules -name "*.ko" -exec cp {} AnyKernel3/modules/system/lib/modules/ \; 2>/dev/null || true
+        fi
+    fi
+    if ! ls AnyKernel3/modules/system/lib/modules/*.ko >/dev/null 2>&1; then
+        echo_w "No modules found for AnyKernel3 (out/modules empty?)"
+        touch AnyKernel3/modules/system/lib/modules/placeholder 2>/dev/null || true
+    else
+        rm -f AnyKernel3/modules/system/lib/modules/placeholder 2>/dev/null || true
+        echo_i "Added $(ls AnyKernel3/modules/system/lib/modules/*.ko 2>/dev/null | wc -l) modules to AnyKernel3"
+    fi
+    REV="$(get_trees_rev)"
+    OUT_ZIP="out/dist/Warm-SM4635-Kernel${REV}.zip"
+    ANYK_ZIP="AnyKernel3/Warm-SM4635-Kernel.zip"
+    rm -f "$OUT_ZIP" "$ANYK_ZIP" 2>/dev/null || true
+    ZIP_OK=false
+    if command -v zip >/dev/null 2>&1; then
+        if ( cd AnyKernel3 && zip -r9 "../$OUT_ZIP" * -x "*.git*" "*.zip" >/dev/null 2>&1 ); then
+            ZIP_OK=true
+        fi
+    else
+        echo_w "zip not found, skipping AnyKernel3"
+        return 0
+    fi
+    if [ "$ZIP_OK" = true ] && [ -f "$OUT_ZIP" ]; then
+        cp "$OUT_ZIP" "$ANYK_ZIP" 2>/dev/null || true
+        echo_i "AnyKernel3 zip: $OUT_ZIP ($(du -h "$OUT_ZIP" 2>/dev/null | cut -f1))"
+        echo_i "Also at $ANYK_ZIP"
+    else
+        echo_w "Failed to create AnyKernel3 zip"
+    fi
+}
+
 ##
 ## Main logic starts here
 ##
@@ -599,10 +712,11 @@ scripts/config --file out/.config -d CONFIG_SND_SOC_MSM_HDMI_CODEC_RX 2>/dev/nul
 # Enable display/mi_disp and spec_sync for pitti warm (display needs these)
 scripts/config --file out/.config -e CONFIG_DRM_MSM_MI_DISP 2>/dev/null || true
 scripts/config --file out/.config -e CONFIG_QCOM_SPEC_SYNC 2>/dev/null || true
-# UBWCP heap intentionally not enabled as builtin - would require mem_buf etc. (causes vmlinux mem_buf_vmperm_* errors)
-# mm-sys-kernel/ubwcp uses weak stub in ubwcp_stub.c when heap disabled
-# Alternative: disable the problematic driver via config if you don't need it
-# scripts/config --file out/.config -d CONFIG_SND_SOC_SIA8001 2>/dev/null || true
+# UBWCP heap: mm-sys-kernel/ubwcp references msm_ubwcp_set_ops /
+# msm_ubwcp_dma_buf_configure_mmap which are exported by qcom_ubwcp_heap.c.
+# Build it as part of the qcom_dma_heaps module (not builtin, so vmlinux
+# doesn't pull in the mem_buf vmperm deps - those resolve as module exports).
+scripts/config --file out/.config -e CONFIG_QCOM_DMABUF_HEAPS_UBWCP 2>/dev/null || true
 
 $NO_LTO && {
     scripts/config --file out/.config \
@@ -621,6 +735,10 @@ else {
     build_modules
     build_dtbs
 }; fi
+
+if ! $ONLY_CONFIG && ! $ONLY_DTB; then
+    build_anykernel3 || echo_w "AnyKernel3 build failed (non-fatal)"
+fi
 
 echo_i "Completed in $((SECONDS / 60)) minute(s) and $((SECONDS % 60)) second(s) !"
 if [ "$COPY_ENABLED" = false ]; then
