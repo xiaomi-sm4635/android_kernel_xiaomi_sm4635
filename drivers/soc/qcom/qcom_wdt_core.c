@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * Copyright (c) 2021-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #include <linux/irqdomain.h>
 #include <linux/delay.h>
@@ -34,7 +34,6 @@
 #include <asm/hardirq.h>
 #include <linux/suspend.h>
 #include <linux/notifier.h>
-#include <linux/kmsg_dump.h>
 
 #define MASK_SIZE        32
 
@@ -233,7 +232,7 @@ int qcom_wdt_pet_resume(struct device *dev)
 	if (wdog_data->wakeup_irq_enable) {
 		if (wdog_data->hibernate || (pm_suspend_target_state == PM_SUSPEND_MEM)) {
 			wdog_data->ops->set_bark_time(wdog_data->bark_time, wdog_data);
-			wdog_data->ops->set_bite_time(wdog_data->bark_time + 3 * 1000, wdog_data);
+			wdog_data->ops->set_bite_time(wdog_data->bark_time + 10 * 1000, wdog_data);
 			val |= BIT(UNMASKED_INT_EN);
 			wdog_data->ops->enable_wdt(val, wdog_data);
 			wdog_data->enabled = true;
@@ -693,25 +692,19 @@ static irqreturn_t qcom_wdt_bark_handler(int irq, void *dev_id)
 	struct msm_watchdog_data *wdog_dd = dev_id;
 	unsigned long nanosec_rem;
 	unsigned long long t = sched_clock();
-	unsigned long long tp = wdog_dd->last_pet;
 
 	nanosec_rem = do_div(t, 1000000000);
 	dev_info(wdog_dd->dev, "QCOM Apps Watchdog bark! Now = %lu.%06lu\n",
 			(unsigned long) t, nanosec_rem / 1000);
 
-	nanosec_rem = do_div(tp, 1000000000);
+	nanosec_rem = do_div(wdog_dd->last_pet, 1000000000);
 	dev_info(wdog_dd->dev, "QCOM Apps Watchdog last pet at %lu.%06lu\n",
-			(unsigned long) tp, nanosec_rem / 1000);
+			(unsigned long) wdog_dd->last_pet, nanosec_rem / 1000);
 	if (wdog_dd->do_ipi_ping)
 		qcom_wdt_dump_cpu_alive_mask(wdog_dd);
 
 	if (wdog_dd->freeze_in_progress)
 		dev_info(wdog_dd->dev, "Suspend in progress\n");
-
-#if defined(CONFIG_ARCH_QTI_VM) && !defined(MODULE)
-	/* Dump logs to shared memory for QTVM */
-	kmsg_dump(KMSG_DUMP_OOPS);
-#endif
 
 	md_dump_process();
 	qcom_wdt_trigger_bite();
@@ -848,8 +841,8 @@ static int qcom_wdt_init(struct msm_watchdog_data *wdog_dd,
 
 static void qcom_wdt_dump_pdata(struct msm_watchdog_data *pdata)
 {
-	dev_dbg(pdata->dev, "wdog bark_time %d", pdata->bark_time);
-	dev_dbg(pdata->dev, "wdog pet_time %d", pdata->pet_time);
+	dev_err(pdata->dev, "wdog bark_time %d", pdata->bark_time);
+	dev_err(pdata->dev, "wdog pet_time %d", pdata->pet_time);
 	dev_dbg(pdata->dev, "wdog perform ipi ping %d", pdata->do_ipi_ping);
 	dev_dbg(pdata->dev, "wdog base address is 0x%lx\n", (unsigned long)
 								pdata->base);
